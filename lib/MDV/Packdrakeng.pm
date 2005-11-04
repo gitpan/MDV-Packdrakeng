@@ -14,14 +14,15 @@
 ##- along with this program; if not, write to the Free Software
 ##- Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 
-# $Id: Packdrakeng.pm,v 1.4 2005/10/28 11:53:32 rgarciasuarez Exp $
+# $Id: Packdrakeng.pm,v 1.10 2005/11/04 10:23:56 rgarciasuarez Exp $
 
 package MDV::Packdrakeng;
 
 use strict;
 use POSIX qw(O_WRONLY O_TRUNC O_CREAT O_RDONLY O_APPEND);
+use File::Path qw(mkpath);
 
-our $VERSION = '1.00';
+our $VERSION = '1.01';
 
 my  ($toc_header, $toc_footer) =
     ('cz[0',      '0]cz');
@@ -43,18 +44,6 @@ sub tempfile {
     return ($handle, $fname);
 }
 
-# File::Path hack to not require it
-sub mkpath {
-    my ($path) = @_;
-    $path =~ s:/*$::; # removing leading '/'
-    -d $path and return 1;
-    # need parent creation ?
-    if (index($path, '/') > 0) {
-        mkpath(substr($path, 0, rindex($path, '/'))) or return 0;
-    }
-    mkdir($path)
-}
-
 sub _new {
     my ($class, %options) = @_;
 
@@ -71,7 +60,7 @@ sub _new {
         level => defined($options{comp_level}) ? $options{comp_level} : 6,
 
         # A compressed block will contain 400k of compressed data
-        block_size => defined($options{block_size}) ? $options{block_size} : 400 * 1024, 
+        block_size => defined($options{block_size}) ? $options{block_size} : 400 * 1024,
         bufsize => $options{bufsize} || 65536, # Arbitrary buffer size to read files
 
         # Internal data
@@ -87,7 +76,7 @@ sub _new {
         # Compression sub
         subcompress => \&extern_compress,
         subuncompress => \&extern_uncompress,
-        direct_write => 0, # Define if wrapper write directly in archive and not into temp file
+        direct_write => 0, # true if wrapper writes directly in archive and not into temp file
 
         # Data we need keep in memory to achieve the storage
         current_block_files => {}, # Files in pending compressed block
@@ -99,8 +88,12 @@ sub _new {
         ustream_data => undef,     # Wrapper data we need to keep in memory (uncompression)
 
         # log and verbose function:
-        log => $options{quiet} ? sub {} : sub { my @w = @_; $w[0] .= "\n"; printf STDERR @w },
-        debug => $options{debug} ? sub { my @w =@_; $w[0] = "Debug: $w[0]\n"; printf STDERR @w } : sub {},
+        log => $options{quiet}
+	    ? sub { our $error = "$_[0]\n" }
+	    : sub { our $error = "$_[0]\n"; warn $error },
+        debug => $options{debug}
+	    ? sub { my @w = @_; $w[0] = "Debug: $w[0]\n"; printf STDERR @w }
+	    : sub {},
     };
 
     bless($pack, $class)
@@ -109,10 +102,13 @@ sub _new {
 sub new {
     my ($class, %options) = @_;
     my $pack = _new($class, %options);
-    sysopen($pack->{handle}, $pack->{filename}, O_WRONLY | O_TRUNC | O_CREAT) or return undef;
+    sysopen($pack->{handle}, $pack->{filename}, O_WRONLY | O_TRUNC | O_CREAT) or do {
+	$pack->{log}("Can't open $pack->{filename}: $!");
+	return undef;
+    };
     $pack->choose_compression_method();
     $pack->{need_build_toc} = 1;
-    $pack->{debug}->("Creating new archive with '%s' / '%s'%s.",
+    $pack->{debug}("Creating new archive with '%s' / '%s'%s.",
         $pack->{compress_method}, $pack->{uncompress_method},
         $pack->{use_extern} ? "" : " (internal compression)");
     $pack
@@ -121,9 +117,12 @@ sub new {
 sub open {
     my ($class, %options) = @_;
     my $pack = _new($class, %options);
-    sysopen($pack->{handle}, $pack->{filename}, O_RDONLY) or return undef;
+    sysopen($pack->{handle}, $pack->{filename}, O_RDONLY) or do {
+	$pack->{log}("Can't open $pack->{filename}: $!");
+	return undef;
+    };
     $pack->read_toc() or return undef;
-    $pack->{debug}->("Opening archive with '%s' / '%s'%s.",
+    $pack->{debug}("Opening archive with '%s' / '%s'%s.",
         $pack->{compress_method}, $pack->{uncompress_method},
         $pack->{use_extern} ? "" : " (internal compression)");
     $pack
@@ -341,7 +340,7 @@ sub extern_compress {
         close($hout);
         waitpid $pack->{cstream_data}{pid}, 0;
         sysopen(my $hin, $pack->{cstream_data}{file_block}, O_RDONLY) or do {
-            $pack->{log}("Can't open temp block file");
+            $pack->{log}("Can't open temp block file: $!");
             return 0, 0;
         };
         $outsize = (stat($pack->{cstream_data}{file_block}))[7];
@@ -368,10 +367,10 @@ sub extern_uncompress {
         unlink($pack->{ustream_data}{tempname}); # deleting temp file
         $pack->{ustream_data} = undef;
     }
-    
+
     defined($fileinfo) or return 0;
+
     # We have to first extract the block to a temp file, burk !
-    
     if (!defined($pack->{ustream_data})) {
         my $tempfh;
         $pack->{ustream_data}{coff} = $fileinfo->{coff};
@@ -401,7 +400,7 @@ sub extern_uncompress {
             };
         }
         close($tempfh);
-        
+
 	my $cmd = $pack->{uncompress_method} eq 'gzip -d' || $pack->{uncompress_method} eq 'bzip2 -d' ?
 	  "$pack->{uncompress_method} -c '$pack->{ustream_data}{tempname}'" :
 	  "$pack->{uncompress_method} <  '$pack->{ustream_data}{tempname}'";
@@ -448,7 +447,7 @@ sub extern_uncompress {
         } else {
             $bw = length($data);
         }
-        
+
         syswrite($destfh, $data, $bw) == $bw or do {
             $pack->{log}("Can't write data into dest");
             return -1;
@@ -469,7 +468,7 @@ sub extract_block {
     my ($pack, $dest, $file) = @_;
 
     sysopen(my $handle, $dest, O_WRONLY | O_TRUNC | O_CREAT) or do {
-        $pack->{log}("Can't open $dest");
+        $pack->{log}("Can't open $dest: $!");
         return -1;
     };
 
@@ -480,9 +479,10 @@ sub extract_block {
     };
 
     {
-    my $l;
-    $l = sysread($pack->{handle}, my $buf, $pack->{files}{$file}->{csize}) == $pack->{files}{$file}->{csize} or $pack->{log}("Read only $l / $pack->{files}{$file}->{csize} bytes");
-    syswrite($handle, $buf);
+	my $l;
+	$l = sysread($pack->{handle}, my $buf, $pack->{files}{$file}->{csize}) == $pack->{files}{$file}{csize}
+	    or $pack->{log}("Read only $l / $pack->{files}{$file}->{csize} bytes");
+	syswrite($handle, $buf);
     }
 
     foreach ($pack->sort_files_by_packing(keys %{$pack->{files}})) {
@@ -543,7 +543,7 @@ sub add {
     foreach my $file (@files) {
         $file =~ s://+:/:;
         my $srcfile = $prefix ? "$prefix/$file" : $file;
-        $pack->{debug}->("Adding '%s' as '%s' into archive", $srcfile, $file);
+        $pack->{debug}("Adding '%s' as '%s' into archive", $srcfile, $file);
 
         -l $srcfile and do {
             $pack->add_virtual('l', $file, readlink($srcfile));
@@ -607,7 +607,7 @@ sub extract {
 	    my $destfh;
 	    if (defined $destdir) {
 		sysopen($destfh, $dest, O_CREAT | O_TRUNC | O_WRONLY) or do {
-		    $pack->{log}("Unable to extract $dest");
+		    $pack->{log}("Unable to extract $dest: $!");
 		    next;
 		};
 	    } else {
@@ -629,7 +629,7 @@ sub getcontent {
     my ($pack) = @_;
     return(
         [ keys(%{$pack->{dir}})],
-        [ $pack->sort_files_by_packing(keys %{$pack->{files}}) ], 
+        [ $pack->sort_files_by_packing(keys %{$pack->{files}}) ],
         [ keys(%{$pack->{'symlink'}}) ]
     );
 }
@@ -715,9 +715,6 @@ MDV::Packdrakeng - Simple Archive Extractor/Builder
 C<MDV::Packdrakeng> is a simple indexed archive builder and extractor using
 standard compression methods.
 
-This module is a from scratch rewrite of the original packdrake. Its format is
-fully compatible with old packdrake.
-
 =head1 IMPLEMENTATION
 
 Compressed data are stored by block. For example,
@@ -734,8 +731,8 @@ gives:
 
 A new block is started when its size exceeds the C<block_size> value.
 
-Compressed data are followed by the toc, ie a simple list of packed files.
-Each file name is terminated by the "\n" character:
+Compressed data are followed by the table of contents (toc), that is, a simple
+list of packed files. Each file name is terminated by the C<\n> character:
 
     dir1
     dir2
@@ -831,52 +828,51 @@ Opens an existing archive for extracting or adding files.
 The uncompression command is found into the archive, and the compression
 command is deduced from it.
 
-If you add files, a new compressed block will be started even if the
-last block is smaller than C<block_size>. If some compression options can't be
-found in the archive, the new preference will be applied.
+If you add files, a new compressed block will be started even if the last block
+is smaller than the value of the C<block_size> option. If some compression
+options can't be found in the archive, the new preference will be applied.
 
-Options are same than the C<new()> function.
+Options are the same than for the C<new()> function.
 
 =item B<< MDV::Packdrakeng->add_virtual($type, $filename, $data) >>
 
-Add a file into archive according passed information.
-
+Adds a file into archive according passed information.
 $type gives the type of the file:
 
-- 'd', the file will be a directory, store as '$filename'. $data is not use;
-- 'l', the file will be a symlink named $filename, pointing to the file whose path
-  is given by the string $data;
-- 'f', the file is a normal file, $filename will be its name, $data is an handle to
-  open file, data will be read from current position to the end of file.
+  - 'd', the file will be a directory, store as '$filename'. $data is not used.
+  - 'l', the file will be a symlink named $filename, pointing to the file whose path
+    is given by the string $data.
+  - 'f', the file is a normal file, $filename will be its name, $data is an handle to
+    open file, data will be read from current position to the end of file.
 
 =item B<< MDV::Packdrakeng->add($prefix, @files) >>
 
-Add @files into archive located into $prefix. Only directory, files and symlink
+Adds @files into archive located into $prefix. Only directory, files and symlink
 will be added. For each file, the path should be relative to $prefix and is
 stored as is.
 
 =item B<< MDV::Packdrakeng->extract_virtual(*HANDLE, $filename) >>
 
-Extract $filename data from archive into the *HANDLE. $filename should be a
+Extracts $filename data from archive into the *HANDLE. $filename should be a
 normal file.
 
 =item B<< MDV::Packdrakeng->extract($destdir, @files) >>
 
-Extract @files from the archive into $destdir prefix.
+Extracts @files from the archive into $destdir prefix.
 
 =item B<< MDV::Packdrakeng->getcontent() >>
 
-Return 3 arrayref about found files into archive, respectively directory list,
-files list and symlink list.
+Returns three arrayrefs describing files files into archive, respectively
+directory list, files list and symlink list.
 
 =item B<< MDV::Packdrakeng->infofile($file) >>
 
-Return the type and information about a file into the archive.
+Returns type and information about a given file into the archive; that is:
 
-- return 'f' and the the size of the file for a plain file
-- return 'l' and the point file for a link
-- return 'd' and undef for a directory
-- return undef if the file can't be found into archive.
+  - 'f' and the the size of the file for a plain file
+  - 'l' and the linked file for a symlink
+  - 'd' and undef for a directory
+  - undef if the file can't be found into archive.
 
 =item B<< MDV::Packdrakeng->infofile($handle) >>
 
@@ -890,7 +886,13 @@ Print to $handle (STDOUT if not specified) the table of content of the archive.
 
 =head1 AUTHOR
 
-Olivier Thauvin <nanardon@mandriva.org>, Rafael Garcia-Suarez <rgarciasuarez@mandriva.com>
+Olivier Thauvin <nanardon@mandriva.org>,
+Rafael Garcia-Suarez <rgarciasuarez@mandriva.com>
+
+Copyright (c) 2005 Mandriva
+
+This module is a from scratch-rewrite of the original C<packdrake> utility. Its
+format is fully compatible with the old packdrake.
 
 =head1 LICENSE
 

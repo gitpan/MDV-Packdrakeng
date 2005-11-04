@@ -1,5 +1,5 @@
 %define dist	MDV-Packdrakeng
-%define version	1.00
+%define version	1.01
 %define release	1mdk
 
 Summary:	Simple Archive Extractor/Builder
@@ -39,11 +39,14 @@ rm -rf $RPM_BUILD_ROOT
 
 %files
 %defattr(-,root,root)
-%doc ChangeLog
+%doc ChangeLog README
 %{_mandir}/*/*
 %{perl_vendorlib}/MDV/Packdrakeng
 %{perl_vendorlib}/MDV/Packdrakeng.pm
 
 %changelog
+* Fri Nov 04 2005 Rafael Garcia-Suarez <rgarciasuarez@mandriva.com> 1.01-1mdk
+- 1.01
+
 * Fri Oct 28 2005 Rafael Garcia-Suarez <rgarciasuarez@mandriva.com> 1.00-1mdk
 - Initial MDV release
