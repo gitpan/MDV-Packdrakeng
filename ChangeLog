@@ -1,39 +1,147 @@
-2005-10-28 14:20  Rafael Garcia-Suarez <rgarciasuarez at mandriva.com>
+2007-05-17 17:02  nanardon
 
-	* perl-MDV-Packdrakeng.spec: Add BuildRequires. Don't require
-	  Compress::Zlib.
+	* MANIFEST: - update manifest list
 
-2005-10-28 14:17  Rafael Garcia-Suarez <rgarciasuarez at mandriva.com>
+2007-05-17 17:01  nanardon
 
-	* MANIFEST, Makefile.PL, perl-MDV-Packdrakeng.spec: Add spec file
-	  and target to make rpms for Mandriva
+	* ChangeLog, Makefile.PL, perl-MDV-Packdrakeng.spec: - kill rpm
+	  build from Makefile
 
-2005-10-28 13:53  Rafael Garcia-Suarez <rgarciasuarez at mandriva.com>
+2007-05-17 16:55  nanardon
 
-	* lib/MDV/: Packdrakeng.pm, Packdrakeng/zlib.pm: A bit more docs.
-	  And take credit, since I'm the maintainer.
+	* lib/MDV/Packdrakeng.pm: - add changelog in pod
 
-2005-10-28 12:19  Rafael Garcia-Suarez <rgarciasuarez at mandriva.com>
+2007-05-17 16:25  nanardon
 
-	* t/01packdrakeng.t: Proper cleanup after test
+	* lib/MDV/Packdrakeng.pm: - 1.10
 
-2005-10-28 12:11  Rafael Garcia-Suarez <rgarciasuarez at mandriva.com>
+2007-05-16 22:06  nanardon
 
-	* MANIFEST: Add ChangeLog
+	* lib/MDV/Packdrakeng.pm: - kill external_use, use object method
+	  instead
 
-2005-10-28 12:07  Rafael Garcia-Suarez <rgarciasuarez at mandriva.com>
+2007-05-16 21:57  nanardon
 
-	* lib/MDV/Packdrakeng.pm: Don't use CVS release for CPAN version
-	  number.
+	* lib/MDV/Packdrakeng.pm, lib/MDV/Packdrakeng/zlib.pm: - transform
+	  dirrect_write property into per object sub
 
-2005-10-09 18:51  Olivier Thauvin <thauvin at aerov.jussieu.fr>
+2007-05-15 22:13  nanardon
 
-	* lib/MDV/: Packdrakeng.pm, Packdrakeng/zlib.pm: - split from
-	  rpmtoos - use new namespace
+	* lib/MDV/Packdrakeng.pm: - were going to 1.02
 
-2005-10-09 18:31  Olivier Thauvin <thauvin at aerov.jussieu.fr>
+2007-05-15 22:12  nanardon
 
-	* MANIFEST, Makefile.PL, lib/MDV/Packdrakeng.pm,
-	  lib/MDV/Packdrakeng/zlib.pm, t/01packdrakeng.t: - split from
-	  rpmtools - use new namespace
+	* lib/MDV/Packdrakeng.pm, t/01packdrakeng.t: - allow to use
+	  add_virtual also with a string as data to add a file
+
+2007-05-15 10:24  nanardon
+
+	* lib/MDV/Packdrakeng/zlib.pm: - rename function to generic name
+
+2007-05-15 10:21  nanardon
+
+	* lib/MDV/Packdrakeng.pm: - kill useless assignement
+
+2007-05-15 00:11  nanardon
+
+	* lib/MDV/Packdrakeng/zlib.pm: - create a compress_data() + split
+	  code to allow in futur to add a file from string instead file
+	  handle
+
+2007-05-14 23:42  nanardon
+
+	* lib/MDV/Packdrakeng.pm, lib/MDV/Packdrakeng/zlib.pm: - use OO
+	  code instead code ref
+
+2006-07-12 12:16  nanardon
+
+	* : - rename perl module directories
+
+2006-02-15 12:41  rgarciasuarez
+
+	* : 1.01-2mdk
+
+2005-12-05 22:50  mscherer
+
+	* : - use mkrel for release
+
+2005-11-15 10:44  rgarciasuarez
+
+	* : Ignore MakeMaker build files
+
+2005-11-04 11:25  rgarciasuarez
+
+	* : Regenerate ChangeLog
+
+2005-11-04 10:23  rgarciasuarez
+
+	* : This is 1.01
+
+2005-11-04 10:20  rgarciasuarez
+
+	* : Add README file for CPAN
+
+2005-11-04 10:16  rgarciasuarez
+
+	* : POD formatting cleanup
+
+2005-11-04 10:12  rgarciasuarez
+
+	* : Documentation updates
+
+2005-11-04 10:08  rgarciasuarez
+
+	* : Use File::Path instead of our own mkpath routine (it's in
+	  perl-base)
+
+2005-11-04 10:05  rgarciasuarez
+
+	* : Use $error global variable to keep last log message, even in
+	  quiet mode
+
+2005-11-03 10:42  rgarciasuarez
+
+	* : Better error message reporting
+
+2005-10-28 12:23  rgarciasuarez
+
+	* : ChangeLog for 1.00
+
+2005-10-28 12:20  rgarciasuarez
+
+	* : Add BuildRequires. Don't require Compress::Zlib.
+
+2005-10-28 12:17  rgarciasuarez
+
+	* : Add spec file and target to make rpms for Mandriva
+
+2005-10-28 11:53  rgarciasuarez
+
+	* : A bit more docs. And take credit, since I'm the maintainer.
+
+2005-10-28 10:19  rgarciasuarez
+
+	* : Proper cleanup after test
+
+2005-10-28 10:11  rgarciasuarez
+
+	* : Add ChangeLog
+
+2005-10-28 10:07  rgarciasuarez
+
+	* : Don't use CVS release for CPAN version number.
+
+2005-10-09 16:51  othauvin
+
+	* : - split from rpmtoos
+	  - use new namespace
+
+2005-10-09 16:31  othauvin
+
+	* : - split from rpmtools
+	  - use new namespace
+
+2005-10-09 16:31  
+
+	* : New repository initialized by cvs2svn.
 

@@ -1,9 +1,9 @@
 #!/usr/bin/perl
 
-# $Id: 01packdrakeng.t,v 1.2 2005/10/28 10:19:18 rgarciasuarez Exp $
+# $Id: 01packdrakeng.t 219643 2007-05-15 22:12:25Z nanardon $
 
 use strict;
-use Test::More tests => 41;
+use Test::More tests => 62;
 use Digest::MD5;
 
 use_ok('MDV::Packdrakeng');
@@ -91,10 +91,13 @@ clean_test_files();
 }
 
 # Single test:
-{
+foreach my $external (qw(0 1)) {
     clean_test_files();
 
-    ok(my $pack = MDV::Packdrakeng->new(archive => "packtest.cz"), "Create a new archive");
+    ok(
+        my $pack = MDV::Packdrakeng->new(archive => "packtest.cz", external => $external),
+        "Create a new archive"
+    );
     open(my $fh, "+> test/test") or die "Can't open test file $!";
     syswrite($fh, $coin);
     sysseek($fh, 0, 0);
@@ -104,6 +107,8 @@ clean_test_files();
 
     ok($pack->add_virtual('d', "dir"), "Adding a dir");
     ok($pack->add_virtual('l', "symlink", "dest"), "Adding a symlink");
+    ok($pack->add_virtual('f', "coin_s", $coin), "Adding data from file");
+    close($fh);
     $pack = undef;
 
     ok($pack = MDV::Packdrakeng->open(archive => "packtest.cz"), "Opening the archive");
@@ -127,6 +132,13 @@ clean_test_files();
     sysread($fh, my $data, 1000);
     close($fh);
     ok($data eq $coin, "Data is correct");
+
+    open($fh, "+> test/test_s") or die "Can't open file $!";
+    ok($pack->extract_virtual($fh, "coin_s"), "Extracting data");
+    sysseek($fh, 0, 0);
+    sysread($fh, my $data_s, 1000);
+    close($fh);
+    ok($data_s eq $coin, "Data is correct");
 }
 
 clean_test_files();

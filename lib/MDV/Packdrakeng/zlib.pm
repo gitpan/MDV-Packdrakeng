@@ -20,29 +20,52 @@ package MDV::Packdrakeng::zlib;
 
 use strict;
 use Compress::Zlib;
+use base qw(MDV::Packdrakeng);
 
-(our $VERSION) = q($Id: zlib.pm,v 1.3 2005/10/28 11:53:32 rgarciasuarez Exp $) =~ /(\d+\.\d+)/;
+(our $VERSION) = q($Id: zlib.pm 219690 2007-05-16 21:57:26Z nanardon $) =~ /(\d+)/;
 
 my $gzip_header = pack("C" . Compress::Zlib::MIN_HDR_SIZE, 
     Compress::Zlib::MAGIC1, Compress::Zlib::MAGIC2, 
     Compress::Zlib::Z_DEFLATED(), 0,0,0,0,0,0,  Compress::Zlib::OSCODE);
 
-sub gzip_compress {
+# true if wrapper writes directly in archive and not into temp file
+sub direct_write { 1; }
+
+sub method_info { "internal zlib $VERSION" }
+
+sub compress_handle {
     my ($pack, $sourcefh) = @_;
     my ($insize, $outsize) = (0, 0); # aka uncompressed / compressed data length
 
     # If $sourcefh is not set, this means we want a flush(), for end_block()
     # EOF, flush compress stream, adding crc
     if (!defined($sourcefh)) {
+        return(undef, $pack->compress_data());
+    }
+
+    binmode $sourcefh;
+    while (my $lenght = sysread($sourcefh, my $buf, $pack->{bufsize})) {
+        my $wres = $pack->compress_data($buf);
+        $outsize += $wres;
+        $insize += $lenght;
+    }
+
+    ($insize, $outsize)
+}
+
+sub compress_data {
+    my ($pack, $data) = ($_[0], \$_[1]);
+    my $outsize = 0;
+    if (! defined($$data)) {
         if (defined($pack->{cstream_data}{object})) {
             my ($cbuf, $status) = $pack->{cstream_data}{object}->flush();
             $outsize += syswrite($pack->{handle}, $cbuf);
             $outsize += syswrite($pack->{handle}, pack("V V", $pack->{cstream_data}{crc}, $pack->{cstream_data}{object}->total_in()));
         }
         $pack->{cstream_data} = undef;
-        return(undef, $outsize);
+        return($outsize);
     }
-
+    
     if (!defined $pack->{cstream_data}{object}) {
         # Writing gzip header file
         $outsize += syswrite($pack->{handle}, $gzip_header);
@@ -52,24 +75,19 @@ sub gzip_compress {
 	    -WindowBits    =>  - MAX_WBITS(),
 	);
     }
-
-    binmode $sourcefh;
-    while (my $lenght = sysread($sourcefh, my $buf, $pack->{bufsize})) {
-        $pack->{cstream_data}{crc} = crc32($buf, $pack->{cstream_data}{crc});
-        my ($cbuf, $status) = $pack->{cstream_data}{object}->deflate($buf);
-        my $wres = syswrite($pack->{handle}, $cbuf) || 0;
-        $wres == length($cbuf) or do {
-            warn "Can't push all data to compressor\n";
-            return 0, 0;
-        };
-        $outsize += $wres;
-        $insize += $lenght;
-    }
-
-    ($insize, $outsize)
+        
+    $pack->{cstream_data}{crc} = crc32($$data, $pack->{cstream_data}{crc});
+    my ($cbuf, $status) = $pack->{cstream_data}{object}->deflate($$data);
+    my $wres = syswrite($pack->{handle}, $cbuf) || 0;
+    $wres == length($cbuf) or do {
+        warn "Can't push all data to compressor\n";
+        return 0;
+    };
+    $outsize += $wres;
+    return($outsize);
 }
 
-sub gzip_uncompress {
+sub uncompress_handle {
     my ($pack, $destfh, $fileinfo) = @_;
 
     if (!defined $fileinfo) {
@@ -77,7 +95,7 @@ sub gzip_uncompress {
         return 0;
     }
 
-    if (defined($pack->{ustream_data}) && ($fileinfo->{coff} != $pack->{ustream_data}{coff} || $fileinfo->{off} < $pack->{ustream_data}{off})) {
+    if (defined($pack->{ustream_data}) && ($fileinfo->{coff} != $pack->{ustream_data}{coff} || $fileinfo->{off} < ($pack->{ustream_data}{off} || 0))) {
         $pack->{ustream_data} = undef;
     }
 

@@ -14,7 +14,7 @@
 ##- along with this program; if not, write to the Free Software
 ##- Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 
-# $Id: Packdrakeng.pm,v 1.10 2005/11/04 10:23:56 rgarciasuarez Exp $
+# $Id: Packdrakeng.pm 219698 2007-05-17 16:55:13Z nanardon $
 
 package MDV::Packdrakeng;
 
@@ -22,7 +22,7 @@ use strict;
 use POSIX qw(O_WRONLY O_TRUNC O_CREAT O_RDONLY O_APPEND);
 use File::Path qw(mkpath);
 
-our $VERSION = '1.01';
+our $VERSION = '1.10';
 
 my  ($toc_header, $toc_footer) =
     ('cz[0',      '0]cz');
@@ -53,7 +53,6 @@ sub _new {
         compress_method => $options{compress},
         uncompress_method => $options{uncompress},
         force_extern => $options{extern} || 0, # Don't use perl-zlib
-        use_extern => 1, # default behaviour, informative only
         noargs => $options{noargs},
 
         # compression level, aka -X gzip or bzip option
@@ -72,11 +71,6 @@ sub _new {
         'symlink' => {}, # file => link
 
         coff => 0, # end of current compressed data
-
-        # Compression sub
-        subcompress => \&extern_compress,
-        subuncompress => \&extern_uncompress,
-        direct_write => 0, # true if wrapper writes directly in archive and not into temp file
 
         # Data we need keep in memory to achieve the storage
         current_block_files => {}, # Files in pending compressed block
@@ -108,9 +102,13 @@ sub new {
     };
     $pack->choose_compression_method();
     $pack->{need_build_toc} = 1;
-    $pack->{debug}("Creating new archive with '%s' / '%s'%s.",
+    $pack->{debug}(
+        "Creating new archive with '%s' / '%s'%s.",
         $pack->{compress_method}, $pack->{uncompress_method},
-        $pack->{use_extern} ? "" : " (internal compression)");
+        $pack->can('method_info') ?
+            (" (" . $pack->method_info() . ")") :
+            " (internal compression)"
+    );
     $pack
 }
 
@@ -124,7 +122,7 @@ sub open {
     $pack->read_toc() or return undef;
     $pack->{debug}("Opening archive with '%s' / '%s'%s.",
         $pack->{compress_method}, $pack->{uncompress_method},
-        $pack->{use_extern} ? "" : " (internal compression)");
+        $pack->can('method_info') ? ' (' . $pack->method_info() . ')' : " (internal compression)");
     $pack
 }
 
@@ -146,10 +144,8 @@ sub choose_compression_method {
             eval {
 		require Compress::Zlib; #- need this to ensure that Packdrakeng::zlib will load properly
 		require MDV::Packdrakeng::zlib;
-		$pack->{subcompress} = \&MDV::Packdrakeng::zlib::gzip_compress;
-		$pack->{subuncompress} = \&MDV::Packdrakeng::zlib::gzip_uncompress;
-		$pack->{use_extern} = 0;
-		$pack->{direct_write} = 1;
+
+        bless($pack, 'MDV::Packdrakeng::zlib');
             };
         }
     };
@@ -161,7 +157,7 @@ sub choose_compression_method {
 
 sub DESTROY {
     my ($pack) = @_;
-    $pack->{subuncompress}($pack, undef, undef);
+    $pack->uncompress_handle(undef, undef);
     $pack->build_toc();
     close($pack->{handle}) if $pack->{handle};
     close($pack->{ustream_data}{handle}) if $pack->{ustream_data}{handle};
@@ -278,7 +274,7 @@ sub sort_files_by_packing {
 # Goto to the end of written compressed data
 sub end_seek {
     my ($pack) = @_;
-    my $seekvalue = $pack->{direct_write} ? $pack->{coff} + $pack->{current_block_csize} : $pack->{coff};
+    my $seekvalue = $pack->direct_write ? $pack->{coff} + $pack->{current_block_csize} : $pack->{coff};
     sysseek($pack->{handle}, $seekvalue, 0) == $seekvalue
 }
 
@@ -287,7 +283,7 @@ sub end_seek {
 sub end_block {
     my ($pack) = @_;
     $pack->end_seek() or return 0;
-    my (undef, $csize) = $pack->{subcompress}($pack, undef);
+    my (undef, $csize) = $pack->compress_handle(undef);
     $pack->{current_block_csize} += $csize;
     foreach (keys %{$pack->{current_block_files}}) {
         $pack->{files}{$_} = $pack->{current_block_files}{$_};
@@ -304,14 +300,16 @@ sub end_block {
 # Compression wrapper #
 #######################
 
-sub extern_compress {
+# true if wrapper writes directly in archive and not into temp file
+sub direct_write { 0; }
+
+sub compress_handle {
     my ($pack, $sourcefh) = @_;
-    my ($insize, $outsize, $filesize) = (0, 0, 0); # aka uncompressed / compressed data length
+    my ($insize, $outsize) = (0, 0); # aka uncompressed / compressed data length
     my $hout; # handle for gzip
 
     if (defined($pack->{cstream_data})) {
         $hout = $pack->{cstream_data}{hout};
-        $filesize = (stat($pack->{cstream_data}{file_block}))[7];
     }
     if (defined($sourcefh)) {
         if (!defined($pack->{cstream_data})) {
@@ -356,7 +354,7 @@ sub extern_compress {
     ($insize, $outsize - $pack->{current_block_csize})
 }
 
-sub extern_uncompress {
+sub uncompress_handle {
     my ($pack, $destfh, $fileinfo) = @_;
 
     if (defined($pack->{ustream_data}) && (
@@ -415,7 +413,6 @@ sub extern_uncompress {
 
     my $byteswritten = 0;
     $pack->{ustream_data}{off} = $fileinfo->{off};
-    #my $read = 0;
 
     while ($byteswritten < $fileinfo->{size}) {
         my $data = $pack->{ustream_data}{buf};
@@ -517,7 +514,9 @@ sub add_virtual {
             next;
         };
 
-        my ($size, $csize) = $pack->{subcompress}($pack, $data);
+        my ($size, $csize) = (ref($data) eq 'GLOB') ?
+            $pack->compress_handle($data) :
+            (length($data), $pack->compress_data($data));
         $pack->{current_block_files}{$filename} = {
             size => $size,
             off => $pack->{current_block_off},
@@ -574,7 +573,7 @@ sub extract_virtual {
         $pack->{log}("Can't seek to offset $pack->{files}{$filename}->{coff}");
         return -1;
     };
-    $pack->{subuncompress}($pack, $destfh, $pack->{files}{$filename});
+    $pack->uncompress_handle($destfh, $pack->{files}{$filename});
 }
 
 sub extract {
@@ -842,8 +841,9 @@ $type gives the type of the file:
   - 'd', the file will be a directory, store as '$filename'. $data is not used.
   - 'l', the file will be a symlink named $filename, pointing to the file whose path
     is given by the string $data.
-  - 'f', the file is a normal file, $filename will be its name, $data is an handle to
-    open file, data will be read from current position to the end of file.
+  - 'f', the file is a normal file, $filename will be its name, $data is either
+         an handle to open file, data will be read from current position to the
+         end of file, either a string to push as the content of the file.
 
 =item B<< MDV::Packdrakeng->add($prefix, @files) >>
 
@@ -881,6 +881,18 @@ Print to $handle (STDOUT if not specified) the content of the archive.
 =item B<< MDV::Packdrakeng->dumptoc($handle) >>
 
 Print to $handle (STDOUT if not specified) the table of content of the archive.
+
+=back
+
+=head1 CHANGELOG
+
+=head2 1.10
+
+=over 4
+
+=item use an oo code
+
+=item add_virtual() now accept a string as file content
 
 =back
 

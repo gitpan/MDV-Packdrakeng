@@ -3,7 +3,6 @@ lib/MDV/Packdrakeng.pm
 lib/MDV/Packdrakeng/zlib.pm
 Makefile.PL
 MANIFEST
-perl-MDV-Packdrakeng.spec
 t/01packdrakeng.t
 META.yml                                 Module meta-data (added by MakeMaker)
 README
