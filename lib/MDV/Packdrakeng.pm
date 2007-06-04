@@ -14,7 +14,7 @@
 ##- along with this program; if not, write to the Free Software
 ##- Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 
-# $Id: Packdrakeng.pm 219698 2007-05-17 16:55:13Z nanardon $
+# $Id: Packdrakeng.pm 219962 2007-06-04 22:45:15Z nanardon $
 
 package MDV::Packdrakeng;
 
@@ -22,7 +22,7 @@ use strict;
 use POSIX qw(O_WRONLY O_TRUNC O_CREAT O_RDONLY O_APPEND);
 use File::Path qw(mkpath);
 
-our $VERSION = '1.10';
+our $VERSION = '1.11';
 
 my  ($toc_header, $toc_footer) =
     ('cz[0',      '0]cz');
@@ -306,12 +306,27 @@ sub direct_write { 0; }
 sub compress_handle {
     my ($pack, $sourcefh) = @_;
     my ($insize, $outsize) = (0, 0); # aka uncompressed / compressed data length
+
+    if (!defined($sourcefh)) { # bloc flush call
+        return 0, $pack->compress_data();
+    } else {
+        while (my $length = sysread($sourcefh, my $data, $pack->{bufsize})) {
+            $outsize += $pack->compress_data($data);
+            $insize += $length;
+        }
+        return ($insize, $outsize)
+    }
+}
+
+sub compress_data {
+    my ($pack, $data) = ($_[0], \$_[1]);
+    my ($outsize) = (0); # aka uncompressed / compressed data length
     my $hout; # handle for gzip
 
     if (defined($pack->{cstream_data})) {
         $hout = $pack->{cstream_data}{hout};
     }
-    if (defined($sourcefh)) {
+    if (defined($$data)) {
         if (!defined($pack->{cstream_data})) {
             my $hin;
             ($hin, $pack->{cstream_data}{file_block}) = tempfile();
@@ -319,39 +334,40 @@ sub compress_handle {
             $pack->{cstream_data}{pid} = CORE::open($hout,
                 "|$pack->{compress_method} > $pack->{cstream_data}{file_block}") or do {
                 $pack->{log}("Unable to start $pack->{compress_method}");
-                return 0, 0;
+                return 0;
             };
             $pack->{cstream_data}{hout} = $hout;
             binmode $hout;
         }
         # until we have data to push or data to read
-        while (my $length = sysread($sourcefh, my $data, $pack->{bufsize})) {
-            # pushing data to compressor
-            (my $l = syswrite($hout, $data)) == $length or do {
-                $pack->{log}("Can't push all data to compressor");
-            };
-            $insize += $l;
-            $outsize = (stat($pack->{cstream_data}{file_block}))[7];
-        }
+        # pushing data to compressor
+        (syswrite($hout, $$data)) == length($$data) or do {
+            $pack->{log}("Can't push all data to compressor");
+        };
+        return 0; # We can't be sure about data really written in the pipe 
+                  # because of multitasking and buffer, so nothing has been
+                  # written
     } elsif (defined($pack->{cstream_data})) {
-        # If $sourcefh is not set, this mean we want a flush(), for end_block()
+        # If $data is not set, this mean we want a flush(), for end_block()
         close($hout);
         waitpid $pack->{cstream_data}{pid}, 0;
+        # copy temp bloc to archive
         sysopen(my $hin, $pack->{cstream_data}{file_block}, O_RDONLY) or do {
             $pack->{log}("Can't open temp block file: $!");
-            return 0, 0;
+            return 0;
         };
-        $outsize = (stat($pack->{cstream_data}{file_block}))[7];
         unlink($pack->{cstream_data}{file_block});
-        while (my $lenght = sysread($hin, my $data, $pack->{bufsize})) {
-            (my $l = syswrite($pack->{handle}, $data)) == $lenght or do {
+        while (my $length = sysread($hin, my $tdata, $pack->{bufsize})) {
+            (my $l = syswrite($pack->{handle}, $tdata)) == $length or do {
                 $pack->{log}("Can't write all data in archive");
             };
+            $outsize += $l;
         }
         close($hin);
         $pack->{cstream_data} = undef;
+        # TODO current_block_csize isn't 0 ?
+        return $outsize - $pack->{current_block_csize}
     }
-    ($insize, $outsize - $pack->{current_block_csize})
 }
 
 sub uncompress_handle {
