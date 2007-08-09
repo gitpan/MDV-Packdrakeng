@@ -1,6 +1,6 @@
 #!/usr/bin/perl
 
-# $Id: 01packdrakeng.t 219643 2007-05-15 22:12:25Z nanardon $
+# $Id: 01packdrakeng.t 225630 2007-08-09 11:44:45Z nanardon $
 
 use strict;
 use Test::More tests => 62;
@@ -143,16 +143,16 @@ foreach my $external (qw(0 1)) {
 
 clean_test_files();
 
-test_packing({ archive => "packtest-cat.cz", compress => 'cat', uncompress => 'cat', noargs => 1 }, { create_test_files(30) });
+test_packing({ archive => "packtest-cat.cz", compress => 'cat', uncompress => 'cat', noargs => 1 }, { create_test_files(15) });
 clean_test_files();
 
-test_packing({ archive => "packtest-gzipi.cz" }, { create_test_files(30) });
+test_packing({ archive => "packtest-gzipi.cz" }, { create_test_files(15) });
 clean_test_files();
 
-test_packing({ archive => "packtest-gzip.cz", compress => "gzip", extern => 1}, { create_test_files(30) });
+test_packing({ archive => "packtest-gzip.cz", compress => "gzip", extern => 1}, { create_test_files(15) });
 clean_test_files();
 
-test_packing({ archive => "packtest-bzip2.cz", compress => "bzip2", extern => 1}, { create_test_files(30) });
+test_packing({ archive => "packtest-bzip2.cz", compress => "bzip2", extern => 1}, { create_test_files(15) });
 clean_test_files();
 
 END { unlink <packtest*> }

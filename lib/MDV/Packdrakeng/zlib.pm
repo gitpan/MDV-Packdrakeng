@@ -22,11 +22,11 @@ use strict;
 use Compress::Zlib;
 use base qw(MDV::Packdrakeng);
 
-(our $VERSION) = q($Id: zlib.pm 219690 2007-05-16 21:57:26Z nanardon $) =~ /(\d+)/;
+(our $VERSION) = q($Id: zlib.pm 225628 2007-08-09 11:00:15Z nanardon $) =~ /(\d+)/;
 
-my $gzip_header = pack("C" . Compress::Zlib::MIN_HDR_SIZE, 
-    Compress::Zlib::MAGIC1, Compress::Zlib::MAGIC2, 
-    Compress::Zlib::Z_DEFLATED(), 0,0,0,0,0,0,  Compress::Zlib::OSCODE);
+my $gzip_header = pack("C" . 10,
+    31, 139, 
+    8, 0,0,0,0,0,0, 3);
 
 # true if wrapper writes directly in archive and not into temp file
 sub direct_write { 1; }
@@ -80,8 +80,8 @@ sub compress_data {
     my ($cbuf, $status) = $pack->{cstream_data}{object}->deflate($$data);
     my $wres = syswrite($pack->{handle}, $cbuf) || 0;
     $wres == length($cbuf) or do {
-        warn "Can't push all data to compressor\n";
-        return 0;
+	$pack->{destroyed} = 1;
+        die "Can't push all data to compressor\n";
     };
     $outsize += $wres;
     return($outsize);
@@ -111,7 +111,7 @@ sub uncompress_handle {
             # get magic
             if (sysread($pack->{handle}, $buf, 2) == 2) {
                 my @magic = unpack("C*", $buf);
-                $magic[0] == Compress::Zlib::MAGIC1 && $magic[1] == Compress::Zlib::MAGIC2 or do {
+                $magic[0] == 31 && $magic[1] == 139 or do {
                     warn("Wrong magic header found\n");
                     return -1;
                 };

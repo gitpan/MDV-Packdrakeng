@@ -1,3 +1,55 @@
+2007-08-09 11:45  nanardon
+
+	* lib/MDV/Packdrakeng.pm: - 1.13
+
+2007-08-09 11:44  nanardon
+
+	* t/01packdrakeng.t, t/02methodusage.t: - test
+	  MDV::Packdrakeng::zlib can used, reduce number of tested file
+
+2007-08-09 11:35  nanardon
+
+	* lib/MDV/Packdrakeng.pm, t/02methodusage.t: - ensure
+	  external/internal methods are properly forced
+
+2007-08-09 11:00  nanardon
+
+	* lib/MDV/Packdrakeng/zlib.pm: - in Compress::Zlib version 2,
+	  header value are no longer exported, using numeric value instead
+	  keywords
+
+2007-06-18 10:55  pixel
+
+	* ChangeLog: update
+
+2007-06-18 10:46  pixel
+
+	* .cvsignore, ChangeLog, META.yml: re-sync after the big svn loss
+
+2007-06-18 10:42  pixel
+
+	* lib/MDV/Packdrakeng.pm: 1.12
+
+2007-06-18 10:42  pixel
+
+	* lib/MDV/Packdrakeng.pm, lib/MDV/Packdrakeng/zlib.pm: - raise an
+	  exception when we can't write the generated .cz file
+	  (in case of "No space left on device")
+	  - allow explicit call to $pack->DESTROY
+	  (to allow catching the exception above)
+
+2007-06-04 22:45  nanardon
+
+	* lib/MDV/Packdrakeng.pm: - 1.11
+
+2007-06-04 22:39  nanardon
+
+	* lib/MDV/Packdrakeng.pm: - add compress_data to main module
+
+2007-05-17 17:13  nanardon
+
+	* ChangeLog: - kill ChangeLog file
+
 2007-05-17 17:02  nanardon
 
 	* MANIFEST: - update manifest list

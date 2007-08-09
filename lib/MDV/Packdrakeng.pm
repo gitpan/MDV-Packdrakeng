@@ -14,7 +14,7 @@
 ##- along with this program; if not, write to the Free Software
 ##- Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 
-# $Id: Packdrakeng.pm 219962 2007-06-04 22:45:15Z nanardon $
+# $Id: Packdrakeng.pm 225631 2007-08-09 11:45:44Z nanardon $
 
 package MDV::Packdrakeng;
 
@@ -22,7 +22,7 @@ use strict;
 use POSIX qw(O_WRONLY O_TRUNC O_CREAT O_RDONLY O_APPEND);
 use File::Path qw(mkpath);
 
-our $VERSION = '1.11';
+our $VERSION = '1.13';
 
 my  ($toc_header, $toc_footer) =
     ('cz[0',      '0]cz');
@@ -43,6 +43,8 @@ sub tempfile {
     } while !sysopen($handle, $fname, O_WRONLY | O_APPEND | O_CREAT);
     return ($handle, $fname);
 }
+
+sub method_info { "external $_[0]->{compress_method}/$_[0]->{uncompress_method} $VERSION" }
 
 sub _new {
     my ($class, %options) = @_;
@@ -103,11 +105,8 @@ sub new {
     $pack->choose_compression_method();
     $pack->{need_build_toc} = 1;
     $pack->{debug}(
-        "Creating new archive with '%s' / '%s'%s.",
-        $pack->{compress_method}, $pack->{uncompress_method},
-        $pack->can('method_info') ?
-            (" (" . $pack->method_info() . ")") :
-            " (internal compression)"
+        "Creating new archive with %s.",
+            $pack->method_info(),
     );
     $pack
 }
@@ -120,9 +119,9 @@ sub open {
 	return undef;
     };
     $pack->read_toc() or return undef;
-    $pack->{debug}("Opening archive with '%s' / '%s'%s.",
-        $pack->{compress_method}, $pack->{uncompress_method},
-        $pack->can('method_info') ? ' (' . $pack->method_info() . ')' : " (internal compression)");
+    $pack->{debug}("Opening archive with %s.",
+        $pack->method_info(),
+    );
     $pack
 }
 
@@ -157,8 +156,11 @@ sub choose_compression_method {
 
 sub DESTROY {
     my ($pack) = @_;
+    $pack->{destroyed} and return; #- allow calling DESTROY
+    $pack->{destroyed} = 1;
+
     $pack->uncompress_handle(undef, undef);
-    $pack->build_toc();
+    $pack->build_toc() == 1 or die "Can't write toc into archive\n";
     close($pack->{handle}) if $pack->{handle};
     close($pack->{ustream_data}{handle}) if $pack->{ustream_data}{handle};
 }
